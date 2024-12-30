@@ -54,7 +54,7 @@ async def update_blog(blog_id: int, blog: BlogUpdate, session: Annotated[Session
         if not db_blog:
             raise HTTPException(status_code=404, detail="Blog not found")
 
-        blog_data = blog.dict(exclude_unset=True)
+        blog_data = blog.model_dump(exclude_unset=True)
         for key, value in blog_data.items():
             setattr(db_blog, key, value)
 
