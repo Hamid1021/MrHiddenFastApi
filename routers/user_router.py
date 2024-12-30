@@ -1,75 +1,73 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import select
 from typing import Annotated, List
-from models.blog_model import Blog
-from schemas.blog_schema import BlogRead, BlogCreate, BlogUpdate
+from models.user_model import USER
+from schemas.user_schema import UserRead, UserCreate, UserUpdate
 from config.db_config import SessionDep, get_session
 
 router = APIRouter()
 
-
-@router.post("/users/", response_model=BlogRead)
-async def create_blog(blog: BlogCreate, session: Annotated[SessionDep, Depends(get_session)]) -> BlogRead:
+@router.post("/users/", response_model=UserRead)
+async def create_user(user: UserCreate, session: Annotated[SessionDep, Depends(get_session)]) -> UserRead:
     async with session as sess:
-        db_blog = Blog(
-            title=blog.title,
-            slug=blog.slug,
-            blog_photo=blog.blog_photo,
-            short_description=blog.short_description,
-            text=blog.text,
-            save_type=blog.save_type,
-            author=blog.author,
+        db_user = USER(
+            username=user.username,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            email=user.email,
+            password=user.password,
+            pass_per_save=user.pass_per_save,
+            gender=user.gender,
+            phone_number=user.phone_number,
+            bio=user.bio,
+            custom_user_id=user.custom_user_id,
         )
-        sess.add(db_blog)
+        sess.add(db_user)
         await sess.commit()
-        await sess.refresh(db_blog)
-    return db_blog
+        await sess.refresh(db_user)
+    return db_user
 
-
-@router.get("/users/", response_model=List[BlogRead])
-async def read_blogs(
+@router.get("/users/", response_model=List[UserRead])
+async def read_users(
     session: Annotated[SessionDep, Depends(get_session)],
     offset: int = 0,
     limit: Annotated[int, Query(le=100)] = 100,
-) -> List[BlogRead]:
+) -> List[UserRead]:
     async with session as sess:
-        result = await sess.execute(select(Blog).offset(offset).limit(limit))
-        blogs = result.scalars().all()
-    return blogs
+        result = await sess.execute(select(USER).offset(offset).limit(limit))
+        users = result.scalars().all()
+    return users
 
-
-@router.get("/users/{user_id}", response_model=BlogRead)
-async def read_blog(user_id: int, session: Annotated[SessionDep, Depends(get_session)]) -> BlogRead:
+@router.get("/users/{user_id}", response_model=UserRead)
+async def read_user(user_id: int, session: Annotated[SessionDep, Depends(get_session)]) -> UserRead:
     async with session as sess:
-        blog = await sess.get(Blog, user_id)
-        if not blog:
-            raise HTTPException(status_code=404, detail="Blog not found")
-    return blog
+        user = await sess.get(USER, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+    return user
 
-
-@router.put("/users/{user_id}", response_model=BlogRead)
-async def update_blog(user_id: int, blog: BlogUpdate, session: Annotated[SessionDep, Depends(get_session)]) -> BlogRead:
+@router.put("/users/{user_id}", response_model=UserRead)
+async def update_user(user_id: int, user: UserUpdate, session: Annotated[SessionDep, Depends(get_session)]) -> UserRead:
     async with session as sess:
-        db_blog = await sess.get(Blog, user_id)
-        if not db_blog:
-            raise HTTPException(status_code=404, detail="Blog not found")
+        db_user = await sess.get(USER, user_id)
+        if not db_user:
+            raise HTTPException(status_code=404, detail="User not found")
 
-        blog_data = blog.dict(exclude_unset=True)
-        for key, value in blog_data.items():
-            setattr(db_blog, key, value)
+        user_data = user.dict(exclude_unset=True)
+        for key, value in user_data.items():
+            setattr(db_user, key, value)
 
-        sess.add(db_blog)
+        sess.add(db_user)
         await sess.commit()
-        await sess.refresh(db_blog)
-    return db_blog
-
+        await sess.refresh(db_user)
+    return db_user
 
 @router.delete("/users/{user_id}")
-async def delete_blog(user_id: int, session: Annotated[SessionDep, Depends(get_session)]):
+async def delete_user(user_id: int, session: Annotated[SessionDep, Depends(get_session)]):
     async with session as sess:
-        blog = await sess.get(Blog, user_id)
-        if not blog:
-            raise HTTPException(status_code=404, detail="Blog not found")
-        await sess.delete(blog)
+        user = await sess.get(USER, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        await sess.delete(user)
         await sess.commit()
     return {"ok": True}
