@@ -7,6 +7,7 @@ from config.db_config import SessionDep, get_session
 
 router = APIRouter()
 
+
 @router.post("/users/", response_model=UserRead)
 async def create_user(user: UserCreate, session: Annotated[SessionDep, Depends(get_session)]) -> UserRead:
     async with session as sess:
@@ -27,6 +28,7 @@ async def create_user(user: UserCreate, session: Annotated[SessionDep, Depends(g
         await sess.refresh(db_user)
     return db_user
 
+
 @router.get("/users/", response_model=List[UserRead])
 async def read_users(
     session: Annotated[SessionDep, Depends(get_session)],
@@ -38,6 +40,7 @@ async def read_users(
         users = result.scalars().all()
     return users
 
+
 @router.get("/users/{user_id}", response_model=UserRead)
 async def read_user(user_id: int, session: Annotated[SessionDep, Depends(get_session)]) -> UserRead:
     async with session as sess:
@@ -45,6 +48,7 @@ async def read_user(user_id: int, session: Annotated[SessionDep, Depends(get_ses
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
     return user
+
 
 @router.put("/users/{user_id}", response_model=UserRead)
 async def update_user(user_id: int, user: UserUpdate, session: Annotated[SessionDep, Depends(get_session)]) -> UserRead:
@@ -61,6 +65,7 @@ async def update_user(user_id: int, user: UserUpdate, session: Annotated[Session
         await sess.commit()
         await sess.refresh(db_user)
     return db_user
+
 
 @router.delete("/users/{user_id}")
 async def delete_user(user_id: int, session: Annotated[SessionDep, Depends(get_session)]):
