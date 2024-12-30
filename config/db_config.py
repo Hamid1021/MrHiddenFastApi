@@ -4,10 +4,6 @@ from sqlalchemy.orm import sessionmaker
 from typing import Annotated
 from fastapi import Depends
 
-from models.user_model import USER
-from models.blog_model import Blog
-
-
 sqlite_file_name = "database.db"
 sqlite_url = f"sqlite:///{sqlite_file_name}"
 

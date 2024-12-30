@@ -1,3 +1,8 @@
+from sqlmodel import SQLModel
+# Insert Models Here
+from models.blog_model import Blog
+from models.user_model import USER
+
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -18,7 +23,6 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-from sqlmodel import SQLModel
 target_metadata = SQLModel.metadata
 
 # other values from the config, defined by the needs of env.py,
