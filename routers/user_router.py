@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import select
 from typing import Annotated, List
-from models.blog_model import Blog  # فرض می‌کنیم که مدل Blog در فایل blog_model.py تعریف شده است
-from schemas.blog_schema import BlogRead, BlogCreate, BlogUpdate  # فرض می‌کنیم schemas.py شامل BlogCreate، BlogRead و BlogUpdate است
+from models.blog_model import Blog
+from schemas.blog_schema import BlogRead, BlogCreate, BlogUpdate
 from config.db_config import SessionDep, get_session
 
 router = APIRouter()
+
 
 @router.post("/blogs/", response_model=BlogRead)
 async def create_blog(blog: BlogCreate, session: Annotated[SessionDep, Depends(get_session)]) -> BlogRead:
@@ -24,6 +25,7 @@ async def create_blog(blog: BlogCreate, session: Annotated[SessionDep, Depends(g
         await sess.refresh(db_blog)
     return db_blog
 
+
 @router.get("/blogs/", response_model=List[BlogRead])
 async def read_blogs(
     session: Annotated[SessionDep, Depends(get_session)],
@@ -34,6 +36,7 @@ async def read_blogs(
         blogs = await sess.exec(select(Blog).offset(offset).limit(limit))
         return blogs.all()
 
+
 @router.get("/blogs/{blog_id}", response_model=BlogRead)
 async def read_blog(blog_id: int, session: Annotated[SessionDep, Depends(get_session)]) -> BlogRead:
     async with session as sess:
@@ -41,6 +44,7 @@ async def read_blog(blog_id: int, session: Annotated[SessionDep, Depends(get_ses
         if not blog:
             raise HTTPException(status_code=404, detail="Blog not found")
     return blog
+
 
 @router.put("/blogs/{blog_id}", response_model=BlogRead)
 async def update_blog(blog_id: int, blog: BlogUpdate, session: Annotated[SessionDep, Depends(get_session)]) -> BlogRead:
@@ -57,6 +61,7 @@ async def update_blog(blog_id: int, blog: BlogUpdate, session: Annotated[Session
         await sess.commit()
         await sess.refresh(db_blog)
     return db_blog
+
 
 @router.delete("/blogs/{blog_id}")
 async def delete_blog(blog_id: int, session: Annotated[SessionDep, Depends(get_session)]):
