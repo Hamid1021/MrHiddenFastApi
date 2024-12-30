@@ -8,7 +8,7 @@ from config.db_config import SessionDep, get_session
 router = APIRouter()
 
 
-@router.post("/blogs/", response_model=BlogRead)
+@router.post("/users/", response_model=BlogRead)
 async def create_blog(blog: BlogCreate, session: Annotated[SessionDep, Depends(get_session)]) -> BlogRead:
     async with session as sess:
         db_blog = Blog(
@@ -26,7 +26,7 @@ async def create_blog(blog: BlogCreate, session: Annotated[SessionDep, Depends(g
     return db_blog
 
 
-@router.get("/blogs/", response_model=List[BlogRead])
+@router.get("/users/", response_model=List[BlogRead])
 async def read_blogs(
     session: Annotated[SessionDep, Depends(get_session)],
     offset: int = 0,
@@ -38,19 +38,19 @@ async def read_blogs(
     return blogs
 
 
-@router.get("/blogs/{blog_id}", response_model=BlogRead)
-async def read_blog(blog_id: int, session: Annotated[SessionDep, Depends(get_session)]) -> BlogRead:
+@router.get("/users/{user_id}", response_model=BlogRead)
+async def read_blog(user_id: int, session: Annotated[SessionDep, Depends(get_session)]) -> BlogRead:
     async with session as sess:
-        blog = await sess.get(Blog, blog_id)
+        blog = await sess.get(Blog, user_id)
         if not blog:
             raise HTTPException(status_code=404, detail="Blog not found")
     return blog
 
 
-@router.put("/blogs/{blog_id}", response_model=BlogRead)
-async def update_blog(blog_id: int, blog: BlogUpdate, session: Annotated[SessionDep, Depends(get_session)]) -> BlogRead:
+@router.put("/users/{user_id}", response_model=BlogRead)
+async def update_blog(user_id: int, blog: BlogUpdate, session: Annotated[SessionDep, Depends(get_session)]) -> BlogRead:
     async with session as sess:
-        db_blog = await sess.get(Blog, blog_id)
+        db_blog = await sess.get(Blog, user_id)
         if not db_blog:
             raise HTTPException(status_code=404, detail="Blog not found")
 
@@ -64,10 +64,10 @@ async def update_blog(blog_id: int, blog: BlogUpdate, session: Annotated[Session
     return db_blog
 
 
-@router.delete("/blogs/{blog_id}")
-async def delete_blog(blog_id: int, session: Annotated[SessionDep, Depends(get_session)]):
+@router.delete("/users/{user_id}")
+async def delete_blog(user_id: int, session: Annotated[SessionDep, Depends(get_session)]):
     async with session as sess:
-        blog = await sess.get(Blog, blog_id)
+        blog = await sess.get(Blog, user_id)
         if not blog:
             raise HTTPException(status_code=404, detail="Blog not found")
         await sess.delete(blog)
