@@ -33,8 +33,9 @@ async def read_blogs(
     limit: Annotated[int, Query(le=100)] = 100,
 ) -> List[BlogRead]:
     async with session as sess:
-        blogs = await sess.exec(select(Blog).offset(offset).limit(limit))
-        return blogs.all()
+        result = await sess.execute(select(Blog).offset(offset).limit(limit))
+        blogs = result.scalars().all()
+    return blogs
 
 
 @router.get("/blogs/{blog_id}", response_model=BlogRead)

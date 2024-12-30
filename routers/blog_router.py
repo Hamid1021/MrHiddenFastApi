@@ -33,8 +33,8 @@ async def read_blogs(
     limit: Annotated[int, Query(le=100)] = 100,
 ) -> List[BlogRead]:
     async with session as sess:
-        result = await sess.exec(select(Blog).offset(offset).limit(limit))
-        blogs = result.all()
+        result = await sess.execute(select(Blog).offset(offset).limit(limit))
+        blogs = result.scalars().all()
     return blogs
 
 
