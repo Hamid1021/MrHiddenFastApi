@@ -1,10 +1,13 @@
 import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Annotated, List, Sequence, Type
+from typing import Annotated, List, Type
 from sqlmodel import select
 from models.user_model import USER
-from schemas.user_schema import UserRead, UserCreate, BaseUserUpdate, StaffUserUpdate, SuperuserUpdate, OwnerUpdate
+from schemas.user_schema import (
+    UserRead, BaseUserCreate, BaseUserUpdate, StaffUserUpdate, SuperuserUpdate, OwnerUpdate,
+    OwnerRead, SuperuserRead, StaffUserRead, UserDelete
+)
 from config.db_config import get_session
 from routers.authenticate import oauth2_scheme, get_password_hash, get_current_user
 import uuid
@@ -17,6 +20,9 @@ async def update_user_helper(user_id: int, user_data: dict, session: AsyncSessio
         db_user = await sess.get(USER, user_id)
         if not db_user:
             raise HTTPException(status_code=404, detail="User not found")
+        if 'password' in user_data:
+            user_data['pass_per_save'] = user_data['password']
+            user_data['password'] = get_password_hash(user_data['password'])
         for key, value in user_data.items():
             setattr(db_user, key, value)
         sess.add(db_user)
@@ -47,19 +53,67 @@ async def get_and_check_user(user_id: int, current_user: USER, session: AsyncSes
     return db_user
 
 
-async def check_username_exists(username: str, session: AsyncSession):
+async def check_unique_fields(username: str, email: str, phone_number: str, session: AsyncSession):
     async with session as sess:
-        result = await sess.execute(select(USER).where(USER.username == username))
+        result = await sess.execute(select(USER).where(
+            (USER.username == username) |
+            (USER.email == email) |
+            (USER.phone_number == phone_number)
+        ))
         user = result.scalars().first()
         if user:
-            raise HTTPException(status_code=400, detail="Username already taken")
+            if user.username == username:
+                raise HTTPException(
+                    status_code=400, detail="Username already taken")
+            if user.email == email:
+                raise HTTPException(
+                    status_code=400, detail="Email already taken")
+            if user.phone_number == phone_number:
+                raise HTTPException(
+                    status_code=400, detail="Phone number already taken")
+
+
+@router.get("/normalusers/{user_id}", response_model=UserRead)
+async def read_normal_user(
+        user_id: int, session: AsyncSession = Depends(get_session),
+        token: str = Depends(oauth2_scheme)
+) -> UserRead:
+    current_user = await get_current_user(session=session, token=token)
+
+    if not current_user.is_staff:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this user"
+        )
+    user = await get_and_check_user(user_id, current_user, session)
+    return UserRead.from_orm(user)
+
+
+@router.get("/normalusers/", response_model=List[UserRead])
+async def read_normal_users(
+        session: AsyncSession = Depends(get_session),
+        token: str = Depends(oauth2_scheme),
+        offset: int = 0,
+        limit: Annotated[int, Query(le=100)] = 100,
+) -> List[UserRead]:
+    current_user = await get_current_user(session=session, token=token)
+
+    if not current_user.is_staff:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view users"
+        )
+    async with session as sess:
+        result = await sess.execute(select(USER).offset(offset).limit(limit))
+        users = result.scalars().all()
+    return [UserRead.from_orm(user) for user in users]
 
 
 @router.post("/users/", response_model=UserRead)
 async def create_user(
-        user: UserCreate, session: AsyncSession = Depends(get_session)
+        user: BaseUserCreate, session: AsyncSession = Depends(get_session),
 ) -> UserRead:
-    await check_username_exists(user.username, session)
+    await check_unique_fields(user.username, user.email, user.phone_number, session)
     hashed_password = get_password_hash(user.password)
     async with session as sess:
         db_user = USER(
@@ -82,21 +136,51 @@ async def create_user(
         sess.add(db_user)
         await sess.commit()
         await sess.refresh(db_user)
-    return db_user
+    return UserRead.from_orm(db_user)
 
 
-@router.post("/staffusers/", response_model=UserRead)
-async def create_staffuser(
-        user: UserCreate, session: AsyncSession = Depends(get_session),
+@router.put("/normalusers/{user_id}", response_model=UserRead)
+async def update_normal_user(
+        user_id: int, user: BaseUserUpdate, session: AsyncSession = Depends(get_session),
         token: str = Depends(oauth2_scheme)
 ) -> UserRead:
     current_user = await get_current_user(session=session, token=token)
+
+    db_user = await get_and_check_user(user_id, current_user, session)
+    user_data = user.dict(exclude_unset=True)
+    updated_user = await update_user_helper(user_id, user_data, session)
+    return BaseUserUpdate.from_orm(updated_user)
+
+
+@router.get("/staffusers/{user_id}", response_model=StaffUserRead)
+async def read_staff_user(
+        user_id: int, session: AsyncSession = Depends(get_session),
+        token: str = Depends(oauth2_scheme)
+) -> StaffUserRead:
+    current_user = await get_current_user(session=session, token=token)
+
+    if not current_user.is_staff:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this user"
+        )
+    user = await get_and_check_user(user_id, current_user, session)
+    return StaffUserRead.from_orm(user)
+
+
+@router.post("/staffusers/", response_model=StaffUserRead)
+async def create_staff_user(
+        user: BaseUserCreate, session: AsyncSession = Depends(get_session),
+        token: str = Depends(oauth2_scheme)
+) -> StaffUserRead:
+    current_user = await get_current_user(session=session, token=token)
+
     if not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only superusers can create staff users"
         )
-    await check_username_exists(user.username, session)
+    await check_unique_fields(user.username, user.email, user.phone_number, session)
     hashed_password = get_password_hash(user.password)
     async with session as sess:
         db_user = USER(
@@ -119,21 +203,91 @@ async def create_staffuser(
         sess.add(db_user)
         await sess.commit()
         await sess.refresh(db_user)
-    return db_user
+    return StaffUserRead.from_orm(db_user)
 
 
-@router.post("/superusers/", response_model=UserRead)
-async def create_superuser(
-        user: UserCreate, session: AsyncSession = Depends(get_session),
-        token: str = Depends(oauth2_scheme)
-) -> UserRead:
+@router.get("/staffusers/", response_model=List[StaffUserRead])
+async def read_staff_users(
+        session: AsyncSession = Depends(get_session),
+        token: str = Depends(oauth2_scheme),
+        offset: int = 0,
+        limit: Annotated[int, Query(le=100)] = 100,
+) -> List[StaffUserRead]:
     current_user = await get_current_user(session=session, token=token)
+
+    if not current_user.is_staff:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view users"
+        )
+    async with session as sess:
+        result = await sess.execute(select(USER).offset(offset).limit(limit))
+        users = result.scalars().all()
+    return [StaffUserRead.from_orm(user) for user in users]
+
+
+@router.put("/staffusers/{user_id}", response_model=StaffUserRead)
+async def update_staff_user(
+        user_id: int, user: StaffUserUpdate, session: AsyncSession = Depends(get_session),
+        token: str = Depends(oauth2_scheme)
+) -> StaffUserRead:
+    current_user = await get_current_user(session=session, token=token)
+
+    db_user = await get_and_check_user(user_id, current_user, session)
+    user_data = user.dict(exclude_unset=True)
+    updated_user = await update_user_helper(user_id, user_data, session)
+    return StaffUserRead.from_orm(updated_user)
+
+
+@router.get("/superusers/{user_id}", response_model=SuperuserRead)
+async def read_superuser(
+        user_id: int, session: AsyncSession = Depends(get_session),
+        token: str = Depends(oauth2_scheme)
+) -> SuperuserRead:
+    current_user = await get_current_user(session=session, token=token)
+
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this user"
+        )
+    user = await get_and_check_user(user_id, current_user, session)
+    return SuperuserRead.from_orm(user)
+
+
+@router.get("/superusers/", response_model=List[SuperuserRead])
+async def read_superusers(
+        session: AsyncSession = Depends(get_session),
+        token: str = Depends(oauth2_scheme),
+        offset: int = 0,
+        limit: Annotated[int, Query(le=100)] = 100,
+) -> List[SuperuserRead]:
+    current_user = await get_current_user(session=session, token=token)
+
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view users"
+        )
+    async with session as sess:
+        result = await sess.execute(select(USER).offset(offset).limit(limit))
+        users = result.scalars().all()
+    return [SuperuserRead.from_orm(user) for user in users]
+
+
+@router.post("/superusers/", response_model=SuperuserRead)
+async def create_superuser(
+        user: BaseUserCreate, session: AsyncSession = Depends(get_session),
+        token: str = Depends(oauth2_scheme)
+) -> SuperuserRead:
+    current_user = await get_current_user(session=session, token=token)
+
     if not current_user.is_owner:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only owners can create superusers"
         )
-    await check_username_exists(user.username, session)
+    await check_unique_fields(user.username, user.email, user.phone_number, session)
     hashed_password = get_password_hash(user.password)
     async with session as sess:
         db_user = USER(
@@ -156,18 +310,48 @@ async def create_superuser(
         sess.add(db_user)
         await sess.commit()
         await sess.refresh(db_user)
-    return db_user
+    return SuperuserRead.from_orm(db_user)
 
 
-@router.get("/users/", response_model=List[UserRead])
-async def read_users(
+@router.put("/superusers/{user_id}", response_model=SuperuserRead)
+async def update_superuser(
+        user_id: int, user: SuperuserUpdate, session: AsyncSession = Depends(get_session),
+        token: str = Depends(oauth2_scheme)
+) -> SuperuserRead:
+    current_user = await get_current_user(session=session, token=token)
+
+    db_user = await get_and_check_user(user_id, current_user, session)
+    user_data = user.dict(exclude_unset=True)
+    updated_user = await update_user_helper(user_id, user_data, session)
+    return SuperuserRead.from_orm(updated_user)
+
+
+@router.get("/owner/users/{user_id}", response_model=OwnerRead)
+async def read_owner_user(
+        user_id: int, session: AsyncSession = Depends(get_session),
+        token: str = Depends(oauth2_scheme)
+) -> OwnerRead:
+    current_user = await get_current_user(session=session, token=token)
+
+    if not current_user.is_owner:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this user"
+        )
+    user = await get_and_check_user(user_id, current_user, session)
+    return OwnerRead.from_orm(user)
+
+
+@router.get("/owner/users/", response_model=List[OwnerRead])
+async def read_owner_users(
         session: AsyncSession = Depends(get_session),
         token: str = Depends(oauth2_scheme),
         offset: int = 0,
         limit: Annotated[int, Query(le=100)] = 100,
-) -> Sequence[USER]:
+) -> List[OwnerRead]:
     current_user = await get_current_user(session=session, token=token)
-    if not current_user.is_staff:
+
+    if not current_user.is_owner:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to view users"
@@ -175,66 +359,25 @@ async def read_users(
     async with session as sess:
         result = await sess.execute(select(USER).offset(offset).limit(limit))
         users = result.scalars().all()
-    return users
+    return [OwnerRead.from_orm(user) for user in users]
 
 
-@router.get("/users/{user_id}", response_model=UserRead)
-async def read_user(
-        user_id: int, session: AsyncSession = Depends(get_session),
-        token: str = Depends(oauth2_scheme)
-) -> Type[USER] | None:
-    current_user = await get_current_user(session=session, token=token)
-    user = await get_and_check_user(user_id, current_user, session)
-    return user
-
-
-@router.put("/users/{user_id}", response_model=UserRead)
-async def update_user(
-        user_id: int, user: BaseUserUpdate, session: AsyncSession = Depends(get_session),
-        token: str = Depends(oauth2_scheme)
-) -> Type[USER] | None:
-    current_user = await get_current_user(session=session, token=token)
-    db_user = await get_and_check_user(user_id, current_user, session)
-    user_data = user.dict(exclude_unset=True)
-    return await update_user_helper(user_id, user_data, session)
-
-
-@router.put("/staffusers/{user_id}", response_model=UserRead)
-async def update_staffuser(
-        user_id: int, user: StaffUserUpdate, session: AsyncSession = Depends(get_session),
-        token: str = Depends(oauth2_scheme)
-) -> Type[USER] | None:
-    current_user = await get_current_user(session=session, token=token)
-    db_user = await get_and_check_user(user_id, current_user, session)
-    user_data = user.dict(exclude_unset=True)
-    return await update_user_helper(user_id, user_data, session)
-
-
-@router.put("/superusers/{user_id}", response_model=UserRead)
-async def update_superuser(
-        user_id: int, user: SuperuserUpdate, session: AsyncSession = Depends(get_session),
-        token: str = Depends(oauth2_scheme)
-) -> Type[USER] | None:
-    current_user = await get_current_user(session=session, token=token)
-    db_user = await get_and_check_user(user_id, current_user, session)
-    user_data = user.dict(exclude_unset=True)
-    return await update_user_helper(user_id, user_data, session)
-
-
-@router.put("/owners/{user_id}", response_model=UserRead)
+@router.put("/owners/{user_id}", response_model=OwnerRead)
 async def update_owner(
         user_id: int, user: OwnerUpdate, session: AsyncSession = Depends(get_session),
         token: str = Depends(oauth2_scheme)
-) -> Type[USER] | None:
+) -> OwnerRead:
     current_user = await get_current_user(session=session, token=token)
+
     db_user = await get_and_check_user(user_id, current_user, session)
     user_data = user.dict(exclude_unset=True)
-    return await update_user_helper(user_id, user_data, session)
+    updated_user = await update_user_helper(user_id, user_data, session)
+    return OwnerRead.from_orm(updated_user)
 
 
-@router.delete("/users/{user_id}")
+@router.delete("/users/{user_id}", response_model=UserDelete)
 async def delete_user(user_id: int, session: AsyncSession = Depends(get_session),
-                      token: str = Depends(oauth2_scheme)):
+                      token: str = Depends(oauth2_scheme)) -> UserDelete:
     current_user = await get_current_user(session=session, token=token)
     async with session as sess:
         user = await sess.get(USER, user_id)
@@ -248,4 +391,4 @@ async def delete_user(user_id: int, session: AsyncSession = Depends(get_session)
         check_access_level(current_user, user)
         await sess.delete(user)
         await sess.commit()
-    return {"ok": True}
+    return UserDelete(ok=True)

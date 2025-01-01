@@ -3,7 +3,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 
-class UserCreate(BaseModel):
+class BaseUserCreate(BaseModel):
     username: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -15,6 +15,7 @@ class UserCreate(BaseModel):
 
     class Config:
         orm_mode = True
+        from_attributes = True
 
 
 class BaseUser(BaseModel):
@@ -29,6 +30,7 @@ class BaseUser(BaseModel):
 
     class Config:
         orm_mode = True
+        from_attributes = True
 
 
 class UserRead(BaseUser):
@@ -59,6 +61,7 @@ class BaseUserUpdate(BaseModel):
 
     class Config:
         orm_mode = True
+        from_attributes = True
 
 
 class StaffUserUpdate(BaseUserUpdate):
@@ -71,3 +74,11 @@ class SuperuserUpdate(StaffUserUpdate):
 
 class OwnerUpdate(SuperuserUpdate):
     is_owner: Optional[bool] = None
+
+
+class UserDelete(BaseModel):
+    ok: Optional[bool] = None
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
