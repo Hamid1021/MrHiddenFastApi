@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
 
@@ -8,14 +9,15 @@ class UserCreate(BaseModel):
     last_name: Optional[str] = None
     email: Optional[str] = None
     password: str
-    pass_per_save: Optional[str] = None
     gender: str
     phone_number: Optional[str] = None
     bio: Optional[str] = None
-    custom_user_id: Optional[str] = None
+
+    class Config:
+        orm_mode = True
 
 
-class UserRead(BaseModel):
+class BaseUser(BaseModel):
     id: int
     username: str
     first_name: Optional[str] = None
@@ -29,7 +31,25 @@ class UserRead(BaseModel):
         orm_mode = True
 
 
-class UserUpdate(BaseModel):
+class UserRead(BaseUser):
+    is_active: Optional[bool] = None
+    date_joined: Optional[datetime] = None
+    last_login: Optional[datetime] = None
+
+
+class StaffUserRead(UserRead):
+    is_staff: Optional[bool] = None
+
+
+class SuperuserRead(StaffUserRead):
+    is_superuser: Optional[bool] = None
+
+
+class OwnerRead(SuperuserRead):
+    is_owner: Optional[bool] = None
+
+
+class BaseUserUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     email: Optional[str] = None
@@ -39,3 +59,15 @@ class UserUpdate(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+class StaffUserUpdate(BaseUserUpdate):
+    is_active: Optional[bool] = None
+
+
+class SuperuserUpdate(StaffUserUpdate):
+    is_superuser: Optional[bool] = None
+
+
+class OwnerUpdate(SuperuserUpdate):
+    is_owner: Optional[bool] = None

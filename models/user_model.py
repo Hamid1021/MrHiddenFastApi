@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlmodel import Field, SQLModel
 from typing import Optional
 
@@ -16,3 +18,9 @@ class USER(SQLModel, table=True):
     bio: Optional[str] = Field(default=None)
     custom_user_id: Optional[str] = Field(
         default=None, index=True, unique=True)
+    is_active: Optional[bool] = Field(default=True)
+    is_superuser: Optional[bool] = Field(default=False)
+    is_staff: Optional[bool] = Field(default=False)
+    date_joined: Optional[datetime] = Field(default=datetime.now())
+    last_login: Optional[datetime] = Field(default=None)
+    is_owner: Optional[bool] = Field(default=False)

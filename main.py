@@ -1,15 +1,14 @@
 from fastapi import FastAPI
-from routers import user_router, blog_router
+from routers import user_router, blog_router, authenticate
 
-
-# @asynccontextmanager
-# async def lifespan(app: FastAPI):
-#     create_db_and_tables()
-#     yield
-#     await engine.dispose()
-
-# app = FastAPI(lifespan=lifespan)
 app = FastAPI()
 
-app.include_router(user_router.router)
-app.include_router(blog_router.router)
+app.include_router(user_router.router, tags=["Users"])
+app.include_router(blog_router.router, tags=["Blogs"])
+app.include_router(authenticate.router, tags=["Authenticate"])
+
+# Start the server
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("main:app", host="127.0.0.1", port=3000)
