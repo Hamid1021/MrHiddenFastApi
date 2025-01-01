@@ -80,7 +80,7 @@ async def read_normal_user(
 ) -> UserRead:
     current_user = await get_current_user(session=session, token=token)
 
-    if not current_user.is_staff:
+    if not current_user.is_staff or not current_user.is_owner or not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to view this user"
@@ -98,7 +98,7 @@ async def read_normal_users(
 ) -> List[UserRead]:
     current_user = await get_current_user(session=session, token=token)
 
-    if not current_user.is_staff:
+    if not current_user.is_staff or not current_user.is_owner or not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to view users"
@@ -159,13 +159,33 @@ async def read_staff_user(
 ) -> StaffUserRead:
     current_user = await get_current_user(session=session, token=token)
 
-    if not current_user.is_staff:
+    if not current_user.is_staff or not current_user.is_owner or not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to view this user"
         )
     user = await get_and_check_user(user_id, current_user, session)
     return StaffUserRead.from_orm(user)
+
+
+@router.get("/staffusers/", response_model=List[StaffUserRead])
+async def read_staff_users(
+        session: AsyncSession = Depends(get_session),
+        token: str = Depends(oauth2_scheme),
+        offset: int = 0,
+        limit: Annotated[int, Query(le=100)] = 100,
+) -> List[StaffUserRead]:
+    current_user = await get_current_user(session=session, token=token)
+
+    if not current_user.is_staff or not current_user.is_owner or not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view users"
+        )
+    async with session as sess:
+        result = await sess.execute(select(USER).offset(offset).limit(limit))
+        users = result.scalars().all()
+    return [StaffUserRead.from_orm(user) for user in users]
 
 
 @router.post("/staffusers/", response_model=StaffUserRead)
@@ -206,26 +226,6 @@ async def create_staff_user(
     return StaffUserRead.from_orm(db_user)
 
 
-@router.get("/staffusers/", response_model=List[StaffUserRead])
-async def read_staff_users(
-        session: AsyncSession = Depends(get_session),
-        token: str = Depends(oauth2_scheme),
-        offset: int = 0,
-        limit: Annotated[int, Query(le=100)] = 100,
-) -> List[StaffUserRead]:
-    current_user = await get_current_user(session=session, token=token)
-
-    if not current_user.is_staff:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to view users"
-        )
-    async with session as sess:
-        result = await sess.execute(select(USER).offset(offset).limit(limit))
-        users = result.scalars().all()
-    return [StaffUserRead.from_orm(user) for user in users]
-
-
 @router.put("/staffusers/{user_id}", response_model=StaffUserRead)
 async def update_staff_user(
         user_id: int, user: StaffUserUpdate, session: AsyncSession = Depends(get_session),
@@ -246,7 +246,7 @@ async def read_superuser(
 ) -> SuperuserRead:
     current_user = await get_current_user(session=session, token=token)
 
-    if not current_user.is_superuser:
+    if not current_user.is_owner or not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to view this user"
@@ -264,7 +264,7 @@ async def read_superusers(
 ) -> List[SuperuserRead]:
     current_user = await get_current_user(session=session, token=token)
 
-    if not current_user.is_superuser:
+    if not current_user.is_owner or not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to view users"
