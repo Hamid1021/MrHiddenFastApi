@@ -3,7 +3,6 @@ from typing import Optional
 from datetime import datetime
 
 
-
 class Blog(SQLModel, table=True):
     __tablename__ = "Blogs"
     id: Optional[int] = Field(default=None, primary_key=True)

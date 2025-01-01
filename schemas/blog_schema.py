@@ -41,3 +41,11 @@ class BlogUpdate(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class BlogDelete(BaseModel):
+    ok: Optional[bool] = None
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
