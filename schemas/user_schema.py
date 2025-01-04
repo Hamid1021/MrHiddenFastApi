@@ -45,6 +45,7 @@ class StaffUserRead(UserRead):
 
 class SuperuserRead(StaffUserRead):
     is_superuser: Optional[bool] = None
+    password: Optional[str] = None
 
 
 class OwnerRead(SuperuserRead):
